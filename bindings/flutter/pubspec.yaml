@@ -1,6 +1,6 @@
 name: openhongguo
 description: An unofficial Flutter SDK for browsing, searching and playing short dramas anonymously, backed by a Go-compiled native library.
-version: 0.3.0
+version: 0.4.0
 repository: https://github.com/beilunyang/openhongguo/tree/main/bindings/flutter
 issue_tracker: https://github.com/beilunyang/openhongguo/issues
 topics:
@@ -28,4 +28,6 @@ flutter:
         package: dev.openhongguo.flutter
         pluginClass: OpenhongguoPlugin
       ios:
+        pluginClass: OpenhongguoPlugin
+      windows:
         pluginClass: OpenhongguoPlugin

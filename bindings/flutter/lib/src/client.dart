@@ -237,14 +237,19 @@ class OpenhongguoClient {
   Future<List<SeriesDetail>> getSeriesBatch(List<String> seriesIds) async =>
       _asList(await _call('getSeriesBatch', [seriesIds]), (e) => SeriesDetail.fromJson(_asMap(e)));
 
+  /// 加载一集的弹幕，一次一页。seriesID 是短剧 id，episodeID 是分集 id。
+  ///
+  /// 弹幕按播放时间分页：一页是服务端划出的一段（约 30 秒），条目按出现
+  /// 时间排序。某一段没有弹幕时这一页为空但 HasMore 仍为真，要翻到
+  /// HasMore 为假为止。拖动进度条后用新的 StartMs 重新读。
+  Future<DanmakuPage> listDanmaku(String seriesId, String episodeId,
+          [DanmakuOptions options = const DanmakuOptions()]) async =>
+      DanmakuPage.fromJson(_asMap(await _call(
+          'listDanmaku', [seriesId, episodeId, options.toJson()])));
+
   /// 一部剧的分集列表。
   Future<PagedResult<Episode>> listEpisodes(String seriesId, [EpisodeOptions options = const EpisodeOptions()]) async =>
       PagedResult._fromJson(await _call('listEpisodes', [seriesId, options.toJson()]), Episode.fromJson);
-
-  /// 一集的弹幕，一页；翻到 hasMore 为假为止。
-  Future<DanmakuPage> listDanmaku(String seriesId, String episodeId,
-          [DanmakuOptions options = const DanmakuOptions()]) async =>
-      DanmakuPage.fromJson(_asMap(await _call('listDanmaku', [seriesId, episodeId, options.toJson()])));
 
   /// 多季剧的全部季。
   Future<Album> seasons(String seriesId) async => Album.fromJson(_asMap(await _call('seasons', [seriesId])));

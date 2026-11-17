@@ -212,22 +212,20 @@ class Danmaku {
       };
 }
 
-/// DanmakuPage 是一集弹幕的一页：服务端按播放时间划出的一段（2026-11-11
-/// 实测为 30 秒）。
+/// DanmakuPage 是一集弹幕的一页：服务端按播放时间划出的一段（实测约 30 秒）。
 class DanmakuPage {
   /// Items 按出现时间排序。这一段没有弹幕时为空，但 HasMore 仍可能为真。
   final List<Danmaku> items;
   /// StartMS 和 EndMS 是这一页覆盖的播放时间，单位毫秒。
   final int startMs;
   final int endMs;
-  /// Total 是服务端统计的本集弹幕总数，服务端给出时才有（有些设备拿不到）。
-  /// 服务端只下发其中精选的一部分，所以它通常远大于能取到的条数。
+  /// Total 是服务端统计的本集弹幕总数，服务端给出时才有。
   final int total;
   final bool hasMore;
   final String cursor;
 
   const DanmakuPage({
-    this.items = const [],
+    this.items = const <Danmaku>[],
     this.startMs = 0,
     this.endMs = 0,
     this.total = 0,
@@ -1885,6 +1883,31 @@ class DiscoverOptions {
 
 /// SearchOptions 选择一个搜索页。Tab 取值为综合、剧集、视频、讨论、小说、
 /// 用户或听书，空 tab 即综合。Cursor 是下一个偏移量。
+/// DanmakuOptions 选择一页弹幕。
+///
+/// Cursor 是上一页给出的令牌；为空时从 StartMs（这一集的播放位置，毫秒）读起。
+/// 拖动进度条后用新的位置重新读。Cursor 与 StartMs 只能给一个。
+class DanmakuOptions {
+  final String? cursor;
+  final int? startMs;
+  final int? pageSize;
+
+  const DanmakuOptions({this.cursor, this.startMs, this.pageSize});
+
+  DanmakuOptions copyWith({String? cursor, int? startMs, int? pageSize}) =>
+      DanmakuOptions(
+        cursor: cursor ?? this.cursor,
+        startMs: startMs ?? this.startMs,
+        pageSize: pageSize ?? this.pageSize,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (cursor != null) 'cursor': cursor!,
+        if (startMs != null) 'startMs': startMs!,
+        if (pageSize != null) 'pageSize': pageSize!,
+      };
+}
+
 class SearchOptions {
   final String? cursor;
   final int? pageSize;
@@ -1918,32 +1941,6 @@ class EpisodeOptions {
 
   Map<String, dynamic> toJson() => {
         if (cursor != null) 'cursor': cursor!,
-        if (pageSize != null) 'pageSize': pageSize!,
-      };
-}
-
-/// DanmakuOptions 选择一页弹幕。
-///
-/// Cursor 是上一页给出的令牌。Cursor 为空时，从 StartMs（这一集的播放位置，
-/// 单位毫秒）读起，0 即开头；播放器拖动进度条后，用新的位置重新读。
-/// 服务端从包含这个位置的那一段开始返回，所以第一页可能带着这个位置之前
-/// 一点的弹幕。Cursor 和 StartMs 只能给一个。
-///
-/// PageSize 是一页最多几条，0 取官方播放器的 90；服务端每页给出的条数有上限，
-/// 再大也不会更多。
-class DanmakuOptions {
-  final String? cursor;
-  final int? startMs;
-  final int? pageSize;
-
-  const DanmakuOptions({this.cursor, this.startMs, this.pageSize});
-
-  DanmakuOptions copyWith({String? cursor, int? startMs, int? pageSize}) =>
-      DanmakuOptions(cursor: cursor ?? this.cursor, startMs: startMs ?? this.startMs, pageSize: pageSize ?? this.pageSize);
-
-  Map<String, dynamic> toJson() => {
-        if (cursor != null) 'cursor': cursor!,
-        if (startMs != null) 'startMs': startMs!,
         if (pageSize != null) 'pageSize': pageSize!,
       };
 }

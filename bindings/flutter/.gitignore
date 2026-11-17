@@ -6,6 +6,3 @@ android/.gradle
 android/local.properties
 android/build/
 # ../mobile/build.sh flutter 放进来的 Go core
-android/libs/
-android/src/main/jniLibs/
-ios/OpenhongguoCore.xcframework/
