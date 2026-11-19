@@ -1,9 +1,16 @@
 ## 0.4.0
 
-- 接入上游 PR #13 的最新播放取址协议，修复取址失败
-- 设备注册版本与最新播放协议保持一致
-- 取址顺序：新协议原设备重签重试 → 旧接口兼容 → 有限次更换匿名设备
-- 修复 2026-11-16 起旧接口一律返回空 body 导致的无法播放
+- 新增选项 `signerUrl` 和 `signerToken`（Go 是 `SignerURL`、`SignerToken`），可以把请求签名交给 openhongguo-signer 签名服务。不设时仍用内置签名。签名服务不可用时返回 `SIGNER_UNAVAILABLE`，错误信息带有签名服务给出的原因，不会回退到内置签名。命令行工具用环境变量 `OHG_SIGNER_URL` 和 `OHG_SIGNER_TOKEN`。
+- 新增签名服务 openhongguo-signer（仓库的 `signer/` 目录）：在 unidbg 里运行 App 自带的签名库，通过 HTTP 提供签名。镜像发布在 Docker Hub 的 `beilunyang/openhongguo-signer`。
+- 本 fork 同步至上游 v0.4.0，播放取址修复见下面的 0.3.1。
+- 本 fork 保留预编译原生库（Android `core.jar` 与四个 ABI 的 `libgojni.so`、iOS xcframework），并新增 windows 平台桥接（cgo DLL，再生步骤见 `windows/BUILD_DLL.md`）；上游的 gitignore 规则相应放开。
+- `pubspec.yaml` 的 description 保持 ASCII：规避中文 Windows 下 pub 读取 git stdout 按 GBK 重编码导致的 YAML 解析失败。
+
+## 0.3.1
+
+- 播放改走 V5 取址接口，请求参数和签名与 7.4.3.32 版客户端一致。0.3.0 取播放模型失败的问题在这一版修复。
+- 读取演员作品时先取作品页的 tab 列表，再按「剧作」tab 请求。不同设备的 tab 编号不同，0.3.0 在部分设备上会得到空列表。
+- 搜索联想的关键词参数改为 `q`，与客户端一致。
 
 ## 0.3.0
 

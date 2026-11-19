@@ -1,0 +1,2 @@
+# cgo 生成的导出头，每次构建产出，不入库
+openhongguo.h

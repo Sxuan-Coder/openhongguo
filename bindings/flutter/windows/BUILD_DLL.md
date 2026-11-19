@@ -1,7 +1,8 @@
 # openhongguo.dll 的再生方法
 
-`windows/openhongguo.dll`（7,380,992 字节，sha256
-`63a906132a71ede32703c874993ea4e09d224dfb701f42879b912cc1fed9025`）是
+`windows/openhongguo.dll`（7,403,008 字节，sha256
+`868e1a1e5601e57d565a34319a1d6ee7deee0dfebf53cc7ba7eebea4e83eeef3`，对应上游
+v0.4.0）是
 [openhongguo Go SDK](https://github.com/beilunyang/openhongguo) 经
 cgo `-buildmode=c-shared` 编出的 Windows x64 产物，以二进制入库
 （约 7 MB）。SDK 升级时按以下步骤再生。
