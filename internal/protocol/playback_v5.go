@@ -10,7 +10,11 @@ import (
 )
 
 const (
-	PathPlaybackV5      = "/novel/player/multi_video_model/player/v1"
+	// PathPlaybackV5 是播放模型接口。2026-11-20 起服务端把 dr_scene 从路径段
+	// 移进了请求体（App 里的模板是 POST /novel/player/multi_video_model/:dr_scene/v1/），
+	// 旧路径 /multi_video_model/player/v1 仍回 HTTP 200 但响应体为空，
+	// 所以它不再被当成「路由不可用」。
+	PathPlaybackV5      = "/novel/player/multi_video_model/v1/"
 	PathVideoTab        = "/reading/bookapi/video_tab/multi_video_model/v1/"
 	VideoTabUserAgent   = "com.phoenix.read/73932 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)"
 	PlaybackVersionCode = 74332
