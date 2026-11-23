@@ -1,7 +1,6 @@
 package sdk_test
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -462,18 +461,15 @@ func assertAnonymousWire(t *testing.T, seen []captured) {
 			if hit.Header.Get("lc") != "101" || hit.Header.Get("x-xs-from-web") != "0" || !strings.Contains(hit.Header.Get("User-Agent"), "com.phoenix.read/74332 ") {
 				t.Fatalf("playback headers = %v", hit.Header)
 			}
-			zr, err := gzip.NewReader(strings.NewReader(hit.Body))
-			if err != nil {
-				t.Fatalf("playback body is not gzip: %v", err)
+			// 播放请求体是明文 JSON（2026-11-23 起的旧版签名档），不再 gzip。
+			plain := []byte(hit.Body)
+			if !json.Valid(plain) {
+				t.Fatalf("playback body is not plain JSON: %q", hit.Body)
 			}
-			plain, err := io.ReadAll(zr)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(string(plain), `"mixed_video_id_map":{"1004":["7100000000000201"]}`) || !strings.Contains(string(plain), `"need_all_video_definition":true`) || !strings.Contains(string(plain), `"device_level":1`) {
+			if !strings.Contains(string(plain), `"mixed_video_id_map":{"1004":["7100000000000201"]}`) || !strings.Contains(string(plain), `"need_all_video_definition":true`) || !strings.Contains(string(plain), `"device_level":4`) || strings.Contains(string(plain), `"dr_scene"`) {
 				t.Fatalf("playback body = %s", plain)
 			}
-			if hit.Header.Get("Content-Encoding") != "gzip" || hit.Header.Get("x-medusa") == "" || hit.Header.Get("x-helios") == "" || hit.Header.Get("x-khronos") == "" || hit.Header.Get("x-ss-stub") == "" {
+			if hit.Header.Get("Content-Encoding") != "" || hit.Header.Get("x-medusa") == "" || hit.Header.Get("x-helios") == "" || hit.Header.Get("x-khronos") == "" || hit.Header.Get("x-ss-stub") == "" {
 				t.Fatal("playback V5 signature missing")
 			}
 			for _, h := range []string{"x-argus", "x-ladon", "x-gorgon"} {
