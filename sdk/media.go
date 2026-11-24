@@ -66,21 +66,34 @@ func (c *Client) ResolvePlayback(ctx context.Context, episodeID string, _ Playba
 				return nil, err
 			}
 			v5Err := err
-			legacyBody, bodyErr := protocol.PlaybackBody(episodeID)
-			if bodyErr != nil {
-				return nil, bodyErr
-			}
-			ticket := c.clock().UnixMilli()
-			query, headers := sign.SignPlaybackPOST(protocol.PathPlayback, protocol.DeviceQueryPairs(c.identity(p)), ticket, p.DeviceID, protocol.VersionName, legacyBody, nil)
-			raw, _, err = c.doRaw(ctx, "POST", c.apiOrigin+protocol.PathPlayback+"?"+query, anonymousHeaders(c, p, ticket, headers), legacyBody)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
-			}
-			if err != nil {
-				if playbackRouteUnavailable(err) {
-					return nil, v5Err
+			// video_tab 回退（fork 自 PR#16 移植）：V5 主路径空响应时，
+			// 这条无请求体的 GET 通道仍可能返回完整模型。
+			tabRaw, tabErr := c.resolveVideoTab(ctx, p, episodeID)
+			if tabErr == nil && len(tabRaw) > 0 {
+				raw = tabRaw
+			} else {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return nil, ctxErr
 				}
-				return nil, err
+				if tabErr != nil && !errors.Is(tabErr, ErrAnonymousLimited) && !playbackRouteUnavailable(tabErr) {
+					return nil, tabErr
+				}
+				legacyBody, bodyErr := protocol.PlaybackBody(episodeID)
+				if bodyErr != nil {
+					return nil, bodyErr
+				}
+				ticket := c.clock().UnixMilli()
+				query, headers := sign.SignPlaybackPOST(protocol.PathPlayback, protocol.DeviceQueryPairs(c.identity(p)), ticket, p.DeviceID, protocol.VersionName, legacyBody, nil)
+				raw, _, err = c.doRaw(ctx, "POST", c.apiOrigin+protocol.PathPlayback+"?"+query, anonymousHeaders(c, p, ticket, headers), legacyBody)
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return nil, ctxErr
+				}
+				if err != nil {
+					if playbackRouteUnavailable(err) {
+						return nil, v5Err
+					}
+					return nil, err
+				}
 			}
 		}
 		playback, err := protocol.ParsePlayback(raw, episodeID)
@@ -97,6 +110,24 @@ func (c *Client) ResolvePlayback(ctx context.Context, episodeID string, _ Playba
 func playbackRouteUnavailable(err error) bool {
 	var api *APIError
 	return errors.As(err, &api) && (api.HTTPStatus == 404 || api.HTTPStatus == 405)
+}
+
+// resolveVideoTab 向无请求体的 video_tab 通道请求分集模型。它是 V5 播放
+// 接口空响应时的回退；响应与 V5 同为 TTVideoEngine 模型形状。
+func (c *Client) resolveVideoTab(ctx context.Context, p *DeviceProfile, episodeID string) ([]byte, error) {
+	query, signed, err := c.playbackSigner.Sign(protocol.VideoTabPairs(episodeID, c.identity(p)), c.clock().UnixMilli(), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	headers := map[string]string{
+		"User-Agent": protocol.VideoTabUserAgent,
+		"Accept":     "application/json",
+	}
+	for name, value := range signed {
+		headers[name] = value
+	}
+	raw, _, err := c.doRaw(ctx, "GET", c.apiOrigin+protocol.PathVideoTab+"?"+query, headers, nil)
+	return raw, err
 }
 
 // ContentKey 从播放模型算出加密分集的内容密钥。
