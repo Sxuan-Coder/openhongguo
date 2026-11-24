@@ -5,11 +5,13 @@
 [![npm react-native](https://img.shields.io/npm/v/react-native-openhongguo?label=npm%20react-native)](https://www.npmjs.com/package/react-native-openhongguo)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.beilunyang/openhongguo)](https://central.sonatype.com/artifact/io.github.beilunyang/openhongguo)
 [![pub.dev](https://img.shields.io/pub/v/openhongguo)](https://pub.dev/packages/openhongguo)
+[![Docker](https://img.shields.io/docker/v/beilunyang/openhongguo-signer?sort=semver&label=docker%20signer)](https://hub.docker.com/r/beilunyang/openhongguo-signer)
 [![CI](https://github.com/beilunyang/openhongguo/actions/workflows/ci.yml/badge.svg)](https://github.com/beilunyang/openhongguo/actions/workflows/ci.yml)
 
 [![npm downloads](https://img.shields.io/npm/d18m/openhongguo?label=npm%20downloads)](https://www.npmjs.com/package/openhongguo)
 [![react-native downloads](https://img.shields.io/npm/d18m/react-native-openhongguo?label=react-native%20downloads)](https://www.npmjs.com/package/react-native-openhongguo)
 [![pub downloads](https://img.shields.io/pub/dm/openhongguo?label=pub%20downloads)](https://pub.dev/packages/openhongguo)
+[![Docker pulls](https://img.shields.io/docker/pulls/beilunyang/openhongguo-signer?label=docker%20pulls)](https://hub.docker.com/r/beilunyang/openhongguo-signer)
 [![CLI downloads](https://img.shields.io/github/downloads/beilunyang/openhongguo/total?label=CLI%20downloads)](https://github.com/beilunyang/openhongguo/releases)
 
 openhongguo 是红果短剧（Hongguo）的非官方 SDK，提供 Go、Node.js、Android、iOS、React Native 和 Flutter 版本。SDK 可以浏览短剧目录、搜索短剧、读取短剧和分集的详情与弹幕，并取得分集的播放地址和内容密钥。
@@ -44,8 +46,8 @@ SDK 用匿名设备发送所有请求，不需要登录。Go 以外的 SDK 都�
 |---|---|---|---|
 | Go | [`github.com/beilunyang/openhongguo`](https://pkg.go.dev/github.com/beilunyang/openhongguo/sdk) | `go get github.com/beilunyang/openhongguo@latest` | 本文 |
 | Node.js | [`openhongguo`](https://www.npmjs.com/package/openhongguo) | `npm install openhongguo` | [bindings/node](bindings/node/README.md) |
-| Android（Kotlin） | [`io.github.beilunyang:openhongguo`](https://central.sonatype.com/artifact/io.github.beilunyang/openhongguo) | `implementation("io.github.beilunyang:openhongguo:0.4.0")` | [bindings/mobile](bindings/mobile/README.md) |
-| iOS / macOS（Swift） | Swift Package | `.package(url: "https://github.com/beilunyang/openhongguo.git", from: "0.4.0")` | [bindings/mobile](bindings/mobile/README.md) |
+| Android（Kotlin） | [`io.github.beilunyang:openhongguo`](https://central.sonatype.com/artifact/io.github.beilunyang/openhongguo) | `implementation("io.github.beilunyang:openhongguo:0.4.1")` | [bindings/mobile](bindings/mobile/README.md) |
+| iOS / macOS（Swift） | Swift Package | `.package(url: "https://github.com/beilunyang/openhongguo.git", from: "0.4.1")` | [bindings/mobile](bindings/mobile/README.md) |
 | React Native | [`react-native-openhongguo`](https://www.npmjs.com/package/react-native-openhongguo) | `npx expo install react-native-openhongguo` | [bindings/react-native](bindings/react-native/README.md) |
 | Flutter | [`openhongguo`](https://pub.dev/packages/openhongguo) | `flutter pub add openhongguo` | [bindings/flutter](bindings/flutter/README.md) |
 
@@ -293,7 +295,7 @@ type Transport interface {
 
 | 方式 | 怎样开启 | 适用场景 |
 |---|---|---|
-| 内置签名（默认） | 不设 `SignerURL` | 平时使用。纯 Go 实现，不依赖外部服务 |
+| 内置签名（默认） | 不设 `SignerURL` | 平时使用。纯 Go 实现，输出与 App 自带的签名库（v04.10.03）一致，不依赖外部服务 |
 | 签名服务 | 设置 `SignerURL` | 内置签名失效时（例如 App 升级后签名算法变化）。需要先部署 [openhongguo-signer](signer/README.md)，镜像是 Docker Hub 上的 [`beilunyang/openhongguo-signer`](https://hub.docker.com/r/beilunyang/openhongguo-signer) |
 
 ```go
@@ -320,6 +322,7 @@ client, err := adapters.NewClient("anonymous.json", sdk.Options{
 >
 > - 签名方式在创建客户端时确定，之后不能切换。
 > - 只设 `SignerToken`、不设 `SignerURL` 时，仍然使用内置签名。
+> - x-medusa 里有一个字段，签名库按请求的哈希从 16 种算法里挑一种来算。内置签名目前实现了其中 2 种，签名时会把 `_rticket` 往后调几毫秒，直到请求选中已实现的那种，所以 `_rticket` 可能比当前时间晚几毫秒。
 
 使用签名服务时，需要签名的请求发出前，SDK 把 URL 和请求体发给签名服务，用返回的签名头替换内置签名算出的签名头。发给签名服务的请求同样经过 `Transport`。
 

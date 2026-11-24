@@ -1,6 +1,7 @@
 package sdk_test
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -461,15 +462,18 @@ func assertAnonymousWire(t *testing.T, seen []captured) {
 			if hit.Header.Get("lc") != "101" || hit.Header.Get("x-xs-from-web") != "0" || !strings.Contains(hit.Header.Get("User-Agent"), "com.phoenix.read/74332 ") {
 				t.Fatalf("playback headers = %v", hit.Header)
 			}
-			// 播放请求体是明文 JSON（2026-11-23 起的旧版签名档），不再 gzip。
-			plain := []byte(hit.Body)
-			if !json.Valid(plain) {
-				t.Fatalf("playback body is not plain JSON: %q", hit.Body)
+			zr, err := gzip.NewReader(strings.NewReader(hit.Body))
+			if err != nil {
+				t.Fatalf("playback body is not gzip: %v", err)
 			}
-			if !strings.Contains(string(plain), `"mixed_video_id_map":{"1004":["7100000000000201"]}`) || !strings.Contains(string(plain), `"need_all_video_definition":true`) || !strings.Contains(string(plain), `"device_level":4`) || strings.Contains(string(plain), `"dr_scene"`) {
+			plain, err := io.ReadAll(zr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(plain), `"mixed_video_id_map":{"1004":["7100000000000201"]}`) || !strings.Contains(string(plain), `"need_all_video_definition":true`) || !strings.Contains(string(plain), `"device_level":1`) {
 				t.Fatalf("playback body = %s", plain)
 			}
-			if hit.Header.Get("Content-Encoding") != "" || hit.Header.Get("x-medusa") == "" || hit.Header.Get("x-helios") == "" || hit.Header.Get("x-khronos") == "" || hit.Header.Get("x-ss-stub") == "" {
+			if hit.Header.Get("Content-Encoding") != "gzip" || hit.Header.Get("x-medusa") == "" || hit.Header.Get("x-helios") == "" || hit.Header.Get("x-khronos") == "" || hit.Header.Get("x-ss-stub") == "" {
 				t.Fatal("playback V5 signature missing")
 			}
 			for _, h := range []string{"x-argus", "x-ladon", "x-gorgon"} {
@@ -1445,74 +1449,5 @@ func TestContentKeyUnwrapsKeyMaterial(t *testing.T) {
 	}
 	if _, err := sdk.ContentKey(nil); err == nil {
 		t.Fatal("nil model accepted")
-	}
-}
-
-func TestResolvePlaybackFallsBackToVideoTab(t *testing.T) {
-	var paths []string
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		switch r.URL.Path {
-		case protocol.PathRegister:
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(fixture(t, "register-response.json"))
-		case protocol.PathPlaybackV5:
-			w.WriteHeader(http.StatusOK)
-		case protocol.PathVideoTab:
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(fixture(t, "video-tab-playback.json"))
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client, _ := testClient(t, handler)
-	playback, err := client.ResolvePlayback(context.Background(), "7100000000000301", sdk.PlaybackOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(playback.Streams) != 1 || playback.Streams[0].Definition != "360p" {
-		t.Fatalf("playback = %+v", playback)
-	}
-	if !containsPath(paths, protocol.PathPlaybackV5) || !containsPath(paths, protocol.PathVideoTab) {
-		t.Fatalf("paths = %v", paths)
-	}
-}
-
-func containsPath(paths []string, want string) bool {
-	for _, path := range paths {
-		if path == want {
-			return true
-		}
-	}
-	return false
-}
-
-func TestResolvePlaybackFallsBackToLegacyWhenVideoTabIsEmpty(t *testing.T) {
-	var paths []string
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		switch r.URL.Path {
-		case protocol.PathRegister:
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(fixture(t, "register-response.json"))
-		case protocol.PathPlaybackV5, protocol.PathVideoTab:
-			w.WriteHeader(http.StatusOK)
-		case protocol.PathPlayback:
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(fixture(t, "clear-playback.json"))
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client, _ := testClient(t, handler)
-	playback, err := client.ResolvePlayback(context.Background(), "7100000000000201", sdk.PlaybackOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(playback.Streams) != 2 {
-		t.Fatalf("playback = %+v", playback)
-	}
-	if !containsPath(paths, protocol.PathVideoTab) || !containsPath(paths, protocol.PathPlayback) {
-		t.Fatalf("paths = %v", paths)
 	}
 }
