@@ -19,7 +19,9 @@
 // 线程模型：
 // - createClient/releaseClient 不发网络请求，platform 线程直接处理；
 // - OHGCall 同步阻塞，内部覆盖 retryAttempts=3 + deviceResets=2 的最坏
-//   情况（约 5 分钟），必须丢到 C++ worker 线程。完成后从 worker 线程
+//   情况（约 5 分钟），必须丢到 C++ worker 线程；worker 是**固定大小线程
+//   池**（见 WorkerPool），多个调用并行执行，与 Android 端每个调用一个
+//   goroutine 的并发度一致。完成后从 worker 线程
 //   调 result->Success()：引擎 C++ 包装的应答 lambda 自带 messenger 锁
 //   与可用性检查（cpp_client_wrapper/core_implementations.cc 明确注释
 //   "This lambda can be called on any thread."），等价于 Kotlin 端
@@ -237,20 +239,32 @@ std::string DefaultProfileDirUtf8() {
   return WideToUtf8(dir);
 }
 
-// ---------- 单 worker 任务队列 ----------
+// ---------- 调用线程池 ----------
 
-// OHGCall 是同步阻塞调用，全部丢到这个后台线程执行；platform 线程只做
-// 记账与应答。FIFO。
-class WorkerThread final {
+// OHGCall 是同步阻塞调用，全部丢到后台线程执行；platform 线程只做记账与
+// 应答。
+//
+// **为什么是池而不是单个 worker**：Dart 侧本来就会并发发起调用（详情页
+// 同时取推荐 / 多季 / 同类型频道，搜索页并行探测季数），Android 端每个
+// 调用各起一个 goroutine（bindings/mobile/core/core.go 的
+// Client.Start），SDK 也声明「可以在多个线程里同时使用」。原先的单 worker
+// 把这些并发请求排成 FIFO，总耗时变成各次往返之和（Windows 上详情页
+// 4 个请求串行 ≈ 4 倍单次延迟），且一次卡住的调用会堵住其后所有请求。
+// 这里改为固定大小线程池，与 Android 的并发度对齐。
+class WorkerPool final {
  public:
   using Task = std::function<void()>;
 
-  WorkerThread() = default;
-  ~WorkerThread() { Stop(); }
-  WorkerThread(const WorkerThread &) = delete;
-  WorkerThread &operator=(const WorkerThread &) = delete;
+  explicit WorkerPool(size_t size) : size_(size == 0 ? 1 : size) {}
+  ~WorkerPool() { Stop(); }
+  WorkerPool(const WorkerPool &) = delete;
+  WorkerPool &operator=(const WorkerPool &) = delete;
 
-  void Start() { thread_ = std::thread(&WorkerThread::Run, this); }
+  void Start() {
+    for (size_t i = 0; i < size_; i++) {
+      threads_.emplace_back(&WorkerPool::Run, this);
+    }
+  }
 
   void Post(Task task) {
     {
@@ -272,9 +286,12 @@ class WorkerThread final {
       stopping_ = true;
     }
     cv_.notify_all();
-    if (thread_.joinable()) {
-      thread_.join();
+    for (auto &thread : threads_) {
+      if (thread.joinable()) {
+        thread.join();
+      }
     }
+    threads_.clear();
   }
 
  private:
@@ -294,7 +311,8 @@ class WorkerThread final {
     }
   }
 
-  std::thread thread_;
+  const size_t size_;
+  std::vector<std::thread> threads_;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::deque<Task> queue_;
@@ -494,7 +512,7 @@ class Plugin::Impl final {
     }
   }
 
-  // OHGCall 丢 worker 线程执行（同步阻塞最长约 5 分钟）。
+  // OHGCall 丢 worker 线程池执行（同步阻塞最长约 5 分钟）。
   void HandleCall(
       const flutter::EncodableMap &args,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
@@ -601,7 +619,12 @@ class Plugin::Impl final {
   OHGFreeStringFn free_string_ = nullptr;
   std::string dll_error_;
 
-  WorkerThread worker_;
+  // worker 线程池规模：与 Android 端「每次调用一个 goroutine」的并发度
+  // 对齐，同时限制单进程内的并发请求数（Go 侧 DefaultTransport 对同一
+  // 主机的空闲连接上限也是 2，池再大也不能更快）。
+  static constexpr size_t kWorkerCount = 4;
+
+  WorkerPool worker_{kWorkerCount};
   std::mutex clients_mutex_;
   std::unordered_map<int, std::shared_ptr<ClientEntry>> clients_;
 };
